@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP LED Control</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            color: #0F3376;
+            margin-bottom: 20px;
+        }
+        .button {
+            padding: 15px 30px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .on {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .off {
+            background-color: #f44336;
+            color: white;
+        }
+        .on:hover {
+            background-color: #45a049;
+        }
+        .off:hover {
+            background-color: #e53935;
+        }
+        .color-picker {
+            margin-top: 30px;
+        }
+        .color-picker input {
+            width: 100px;
+            height: 50px;
+            border: none;
+            cursor: pointer;
+        }
+        .status {
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <h1>ESP LED Control</h1>
+    <button class="button on" onclick="toggleLED('on')">Turn LED On</button>
+    <button class="button off" onclick="toggleLED('off')">Turn LED Off</button>
+    <div class="color-picker">
+        <h2>Select LED Color</h2>
+        <input type="color" id="colorPicker" value="#ff0000" onchange="changeColor()">
+    </div>
+    <div class="status" id="status">LED is OFF</div>
+    <script>
+        function toggleLED(state) {
+            fetch(`/?led=${state}`).then(response => {
+                console.log(`LED ${state}`);
+                document.getElementById('status').innerText = `LED is ${state.toUpperCase()}`;
+            });
+        }
+
+        function changeColor() {
+            const color = document.getElementById('colorPicker').value;
+            fetch(`/?color=${color.substring(1)}`).then(response => {
+                console.log(`Color changed to ${color}`);
+                document.getElementById('status').innerText = `Color changed to ${color.toUpperCase()}`;
+            });
+        }
+    </script>
+</body>
+</html>
