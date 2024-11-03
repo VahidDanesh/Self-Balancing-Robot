@@ -24,8 +24,9 @@ This document outlines the installation process for setting up an ESP32 board wi
      pip install esptool
      ```
 
-3. **Install MicroPython Firmware**:
+3. **Install MicroPython Firmware**: 
    - Download the latest MicroPython firmware for the ESP32 from the [MicroPython downloads page](https://micropython.org/download/esp32/).
+   - For more information check out [Basic Commands](https://github.com/espressif/esptool/blob/8298cdcc6/docs/en/esptool/basic-commands.rst)
 
 ### Step 2: Connect ESP32 to Your Computer
 
