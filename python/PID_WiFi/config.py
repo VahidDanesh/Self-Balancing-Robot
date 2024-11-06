@@ -1,8 +1,20 @@
+# config.py
+
 # Network Configuration
 NETWORK = {
-  'ssid': 'RobotControl',
-  'password': 'robot123',
-  'authmode': 3  # WPA2
+  'AP': {
+      'ssid': 'RobotControl',
+      'password': 'robot123',
+      'authmode': 3,  # WPA2
+      'max_clients': 1
+  },
+  'STA': {
+      'profiles_file': 'wifi.dat'
+  },
+  'SERVER': {
+      'port': 80,
+      'timeout': 5.0
+  }
 }
 
 # PID Configuration
@@ -63,3 +75,4 @@ const CONFIG = {{
 def write_js_config():
   with open('config.js', 'w') as f:
       f.write(generate_js_config())
+write_js_config()

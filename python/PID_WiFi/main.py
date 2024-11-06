@@ -1,5 +1,4 @@
 import network
-<<<<<<< HEAD
 import neopixel
 import socket
 import gc
@@ -18,25 +17,11 @@ def set_neopixel_color(r, g, b):
 
 
 
-
-
-
 # Network Configuration
 class NetworkManager:
   def __init__(self):
       self.ssid = NETWORK['ssid']
       self.password = NETWORK['password']
-=======
-import socket
-import gc
-from web_server import WebServer
-
-# Network Configuration
-class NetworkManager:
-  def __init__(self, ssid="RobotControl", password="robot123"):
-      self.ssid = ssid
-      self.password = password
->>>>>>> 319503f613b7bee4239c51ebe8075c78e0a83294
       self.ap = network.WLAN(network.AP_IF)
 
   def start_ap(self):
@@ -44,26 +29,24 @@ class NetworkManager:
       self.ap.active(True)
       self.ap.config(essid=self.ssid, 
                     password=self.password,
-                    authmode=network.AUTH_WPA_WPA2_PSK)
+                    authmode=NETWORK['authmode'])
       
       while not self.ap.active():
           pass
       
-      print('Access Point Created')
-      print('Network Name:', self.ssid)
-      print('Password:', self.password)
-      print('IP Address:', self.ap.ifconfig()[0])
-<<<<<<< HEAD
-      set_neopixel_color(0, 0, 100)
-=======
->>>>>>> 319503f613b7bee4239c51ebe8075c78e0a83294
+      print('\n=== WiFi Access Point Created ===')
+      print('To connect to the robot:')
+      print(f'1. Connect to WiFi network: "{self.ssid}"')
+      print(f'2. Use password: "{self.password}"')
+      print(f'3. Open browser and go to: http://{self.ap.ifconfig()[0]}')
+      print('================================\n')
+      set_neopixel_color(0, 0, 50)
       return self.ap
 
 class RobotController:
   def __init__(self):
       """Initialize robot controller with default values"""
       self.pid_values = {
-<<<<<<< HEAD
           key: PID[key]['default'] for key in PID
       }
       self.current_mode = MODES['default']
@@ -81,19 +64,6 @@ class RobotController:
               self.current_speed - MOTOR['acceleration_step'],
               MOTOR['min_speed']
           )
-=======
-          'kp': 1.00,
-          'ki': 0.50,
-          'kd': 0.25
-      }
-      self.current_mode = 'balance'
-      self.current_speed = 0
-
-  def handle_command(self, cmd):
-      """Handle movement commands"""
-      print(f"Command received: {cmd}")
-      # Add motor control implementation here when needed
->>>>>>> 319503f613b7bee4239c51ebe8075c78e0a83294
 
   def update_pid(self, new_values):
       """Update PID values"""
@@ -107,10 +77,56 @@ class RobotController:
       print(f"Changing mode to: {mode}")
       self.current_mode = mode
 
+
+
+def check_system_status():
+  """Print system status for debugging"""
+  import os
+  
+  print("\n=== System Status ===")
+  
+  # Check files
+  print("\nFiles on system:")
+  files = os.listdir()
+  required_files = ['main.py', 'config.py', 'web_server.py', 'index.html', 'config.js']
+  for file in required_files:
+      status = "OK" if file in files else "NOT FOUND"
+      print(f"{status} {file}")
+  
+  # Check memory
+  import gc
+  gc.collect()
+  print(f"\nFree memory: {gc.mem_free()} bytes")
+  
+  # Check network
+  import network
+  ap = network.WLAN(network.AP_IF)
+  print("\nNetwork status:")
+  print(f"Active: {ap.active()}")
+  if ap.active():
+      print(f"Network: {ap.config('essid')}")
+      print(f"IP Address: {ap.ifconfig()[0]}")
+
+
+
+
+
 def main():
-<<<<<<< HEAD
+
+
     write_js_config()
-    print("Configuration file generated")
+       # Add this to main.py after write_js_config()
+    import os
+    print("\nChecking files:")
+    print(os.listdir())  # This will show all files on ESP32
+
+    # check whether the 'config.js' file is created
+    if 'config.js' in os.listdir():
+        print("config.js file created successfully!")
+    else:
+        print("Error creating config.js file!")
+        set_neopixel_color(100, 0, 0)
+
     # Initialize components
     network_manager = NetworkManager()
     web_server = WebServer()
@@ -128,7 +144,7 @@ def main():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', SERVER['port']))
     s.listen(SERVER['max_connections'])
-    print('Web server started')
+    print('Web server started. Listening for incoming connections...')
 
     # Main server loop
     while True:
@@ -153,52 +169,8 @@ def main():
 
 if __name__ == '__main__':
     try:
+        check_system_status()
         main()
     except KeyboardInterrupt:
         print('Server stopped')
         set_neopixel_color(255, 0, 0)
-=======
-  # Initialize components
-  network_manager = NetworkManager()
-  web_server = WebServer()
-  robot = RobotController()
-
-  # Register handlers
-  web_server.register_handler('command', robot.handle_command)
-  web_server.register_handler('pid', robot.update_pid)
-  web_server.register_handler('mode', robot.set_mode)
-
-  # Start access point
-  network_manager.start_ap()
-
-  # Start web server
-  s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  s.bind(('', 80))
-  s.listen(5)
-  print('Web server started')
-
-  # Main server loop
-  while True:
-      try:
-          gc.collect()  # Clean up memory
-          conn, addr = s.accept()
-          print('Client connected from:', addr)
-          request = conn.recv(1024).decode()
-          
-          response = web_server.parse_request(request)
-          conn.send(response.encode('utf-8'))
-          conn.close()
-          
-      except Exception as e:
-          print('Error:', e)
-          try:
-              conn.close()
-          except:
-              pass
-
-if __name__ == '__main__':
-  try:
-      main()
-  except KeyboardInterrupt:
-      print('Server stopped')
->>>>>>> 319503f613b7bee4239c51ebe8075c78e0a83294
