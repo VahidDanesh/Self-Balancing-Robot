@@ -63,6 +63,8 @@ class Stepper:
         self.direction = 1
         self.running = False
         self.enabled = True
+        self.free_run_mode = 0  # 0: disabled, 1: forward, -1: reverse
+        self.free_run_speed = 0.0  # Speed during free run
         
         # Timer management
         self._init_timer(timer_id)
@@ -150,8 +152,39 @@ class Stepper:
             self.current_pos += self.direction
             self.last_step_time = current_time
             
-            # Update speed for next step
-            self._update_speed()
+            # Update speed only if not in free run mode
+            if self.free_run_mode == 0:
+                self._update_speed()
+
+    def free_run(self, direction: int, speed: Optional[float] = None) -> None:
+        """
+        Run the stepper continuously in specified direction at constant speed.
+        
+        Args:
+            direction (int): Direction of rotation (1: forward, -1: reverse, 0: stop)
+            speed (Optional[float]): Speed in steps per second. If None, uses max_speed
+        """
+        if direction not in [-1, 0, 1]:
+            raise ValueError("Direction must be -1, 0, or 1")
+            
+        self.free_run_mode = direction
+        
+        if direction == 0:
+            self.stop()
+            return
+            
+        # Set free run speed
+        self.free_run_speed = speed if speed is not None else self.max_speed
+        if self.free_run_speed > self.max_speed:
+            self.free_run_speed = self.max_speed
+            
+        # Update step interval for constant speed
+        self.step_interval = self._calc_step_interval(self.free_run_speed)
+        self.direction = direction
+        self.running = True
+        
+        if not self.timer_is_running:
+            self._start_timer()
 
     def move_to(self, position: int) -> None:
         """Move to absolute position with acceleration."""
@@ -176,6 +209,7 @@ class Stepper:
 
     def stop(self) -> None:
         """Stop motor with deceleration."""
+        self.free_run_mode = 0
         self.target_pos = self.current_pos
         if self.timer_is_running:
             self.timer.deinit()
@@ -221,13 +255,7 @@ class Stepper:
             raise ValueError("Acceleration must be positive")
         self.acceleration = acceleration
 
-    def set_speed_rpm(self, speed: float) -> None:
-        """Set speed in RPM."""
-        self.set_max_speed(speed * self.steps_per_rev / 60)
     
-    def set_speed_rps(self, speed: float) -> None:
-        """Set speed in RPS."""
-        self.set_max_speed(speed * self.steps_per_rev)
     
 
     def enable(self, state: bool) -> None:
@@ -266,3 +294,15 @@ class Stepper:
         """Get current position in radians."""
         return self.current_pos * 2 * math.pi / self.steps_per_rev
     
+
+    def sps2rpm(self, speed_sps: float) -> float:
+        """Convert speed in steps per second to RPM."""
+        return speed_sps * 60 / self.steps_per_rev
+    
+    def rpm2sps(self, speed_rpm: float) -> float:
+        """Convert speed in RPM to steps per second."""
+        return speed_rpm * self.steps_per_rev / 60
+    
+    def rps2sps(self, speed_rps: float) -> float:
+        """Convert speed in revolutions per second to steps per second."""
+        return speed_rps * self.steps_per_rev
