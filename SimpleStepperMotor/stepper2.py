@@ -201,6 +201,12 @@ class Stepper:
             if self.on_error:
                 self.on_error(f"Timer start failed: {e}")
             raise RuntimeError(f"Timer start failed: {e}")
+    
+    def set_position(self, position: int) -> None:
+        """Set current position in steps."""
+        self.current_pos = position
+    
+
 
     def set_max_speed(self, speed: float) -> None:
         """Set maximum speed in steps per second."""
@@ -214,6 +220,15 @@ class Stepper:
         if acceleration <= 0:
             raise ValueError("Acceleration must be positive")
         self.acceleration = acceleration
+
+    def set_speed_rpm(self, speed: float) -> None:
+        """Set speed in RPM."""
+        self.set_max_speed(speed * self.steps_per_rev / 60)
+    
+    def set_speed_rps(self, speed: float) -> None:
+        """Set speed in RPS."""
+        self.set_max_speed(speed * self.steps_per_rev)
+    
 
     def enable(self, state: bool) -> None:
         """Enable or disable the stepper motor."""
@@ -250,5 +265,4 @@ class Stepper:
     def get_position_rad(self) -> float:
         """Get current position in radians."""
         return self.current_pos * 2 * math.pi / self.steps_per_rev
-    
     
