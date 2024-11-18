@@ -1,87 +1,53 @@
-from machine import Pin
+import machine
+import time
+from stepper import Stepper
 from neopixel import NeoPixel
-from utime import sleep_ms, ticks_ms
-from AccelStepper import *
 
-# Configuration
-MAX_SPEED = 2000000  # Maximum speed in steps per second
-RUN_DURATION = 10000  # Duration to run in each direction in milliseconds
-
-# Define GPIO pins for Motor 1
-STEP_PIN1 = 18  # Connect to PUL+ on TB6600 for Motor 1
-DIR_PIN1 = 19   # Connect to DIR+ on TB6600 for Motor 1
-ENA_PIN1 = 21   # Connect to ENA+ on TB6600 for Motor 1 (optional)
-
-# Define GPIO pins for Motor 2
-STEP_PIN2 = 22  # Connect to PUL+ on TB6600 for Motor 2
-DIR_PIN2 = 23   # Connect to DIR+ on TB6600 for Motor 2
-ENA_PIN2 = 25   # Connect to ENA+ on TB6600 for Motor 2 (optional)
-
-# NeoPixel for status indication
-NEOPIXEL_PIN = 16
-
-# Initialize the stepper motors with DRIVER mode
-motor1 = AccelStepper(DRIVER, STEP_PIN1, DIR_PIN1, ENA_PIN1, 0, True)
-motor2 = AccelStepper(DRIVER, STEP_PIN2, DIR_PIN2, ENA_PIN2, 0, True)
-
+# Define GPIO pins
+pul_pin = 18
+dir_pin = 19
+ena_pin = 21
+neopixel_pin = 16
+steps = 3200
+speed = steps * 10
+# Initialize the stepper motor with enable active low
+stepper_motor = Stepper(pul_pin, dir_pin, ena_pin, steps_per_rev=steps, speed_sps=speed, en_active_low=True)
+stepper_motor.speed_rps(10)
 # Initialize the NeoPixel
-np = NeoPixel(Pin(NEOPIXEL_PIN), 1)
-
-
+np = NeoPixel(machine.Pin(neopixel_pin), 1)
 
 def set_neopixel_color(color):
   np[0] = color
   np.write()
 
-def run_motors_for_duration(duration_ms, speed):
-  start_time = ticks_ms()
-  while ticks_ms() - start_time < duration_ms:
-      motor1.run_speed()
-      motor2.run_speed()
-
-def move_motors():
-  # Enable the stepper motors
-  motor1.enable_outputs()
-  motor2.enable_outputs()
-  motor1.set_max_speed(MAX_SPEED)
-  motor2.set_max_speed(MAX_SPEED)
-  
-
-  while True:
-      # Set direction to clockwise for both motors
-      set_neopixel_color((0, 255, 0))  # Green for running
-
-
-      print("Motor 1 Speed: ", motor1.speed())
-      print("Motor 2 Speed: ", motor2.speed())
-
-
-      motor1.set_speed(MAX_SPEED)
-      motor2.set_speed(MAX_SPEED)
-
-      print("Motor 1 Speed: ", motor1.speed())
-      print("Motor 2 Speed: ", motor2.speed())
-      
-      run_motors_for_duration(RUN_DURATION, MAX_SPEED)
-
-      # Change direction to counter-clockwise for both motors
-      set_neopixel_color((0, 0, 255))  # Blue for changing direction
-
-      motor1.set_speed(-MAX_SPEED)
-      motor2.set_speed(-MAX_SPEED)
-      run_motors_for_duration(RUN_DURATION, -MAX_SPEED)
-
-      # Pause briefly before repeating
-      sleep_ms(3000)
-
 try:
-  move_motors()
+  # Enable the stepper motor (active low logic)
+  stepper_motor.enable(1)  # Enable the motor (active low means setting to 1 will disable, so we use 1 to enable)
+  print(stepper_motor.is_enabled())
+  
+  while True:
+      # Set NeoPixel to green when running
+      set_neopixel_color((0, 255, 0))
+      
+      stepper_motor.target_deg(360*10)
+      time.sleep(2)
+      
+      # Set NeoPixel to blue when idle
+      set_neopixel_color((0, 0, 255))
+      time.sleep(1)
+      
+      # Set NeoPixel to green when running
+      set_neopixel_color((0, 255, 0))
+      
+      stepper_motor.target_deg(-360*10)
+      time.sleep(2)
+      
+      # Set NeoPixel to blue when idle
+      set_neopixel_color((0, 0, 255))
+      time.sleep(1)
 
 except KeyboardInterrupt:
-  # Handle interruption
-  set_neopixel_color((255, 0, 0))  # Red for stopped
-  motor1.stop()
-  motor2.stop()
-  motor1.disable_outputs()
-  motor2.disable_outputs()
-  print("Motor control stopped by user")
+  # Set NeoPixel to red when stopped
+  set_neopixel_color((255, 0, 0))
+  stepper_motor.stop()
+  print("Motor control stopped")
