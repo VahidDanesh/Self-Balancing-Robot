@@ -1,4 +1,3 @@
-from typing import Optional, Union, Callable
 import machine
 import math
 import time
@@ -20,9 +19,9 @@ class Stepper:
     """
     
     def __init__(self, 
-                 step_pin: Union[machine.Pin, int],
-                 dir_pin: Union[machine.Pin, int],
-                 en_pin: Optional[Union[machine.Pin, int]] = None,
+                 step_pin: machine.Pin | int,
+                 dir_pin:  machine.Pin | int,
+                 en_pin:  machine.Pin | int | None = None,
                  steps_per_rev: int = 200,
                  max_speed_sps: float = 1000,
                  acceleration: float = 1000,
@@ -70,8 +69,8 @@ class Stepper:
         self._init_timer(timer_id)
         
         # Callbacks
-        self.on_target_reached: Optional[Callable] = None
-        self.on_error: Optional[Callable] = None
+        self.on_target_reached = None
+        self.on_error = None
 
     def _init_timer(self, timer_id: int) -> None:
         """Initialize hardware timer with error handling."""
@@ -156,7 +155,7 @@ class Stepper:
             if self.free_run_mode == 0:
                 self._update_speed()
 
-    def free_run(self, direction: int, speed: Optional[float] = None) -> None:
+    def free_run(self, direction: int, speed: float = None) -> None:
         """
         Run the stepper continuously in specified direction at constant speed.
         
@@ -265,6 +264,10 @@ class Stepper:
         self.enabled = state
         if not state:
             self.dir_value_func(0)
+
+    def is_enabled(self) -> bool:
+        """Check if the stepper motor is enabled."""
+        return self.enabled
 
     def is_running(self) -> bool:
         """Return True if motor is currently moving."""
