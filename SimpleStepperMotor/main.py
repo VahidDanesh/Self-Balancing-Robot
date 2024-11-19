@@ -1,71 +1,193 @@
 import machine
+from machine import Pin
+from neopixel import NeoPixel
 import time
 from mystepper import Stepper
-from neopixel import NeoPixel
-
-# Define GPIO pins
-pul_pin = 18
-dir_pin = 19
-ena_pin = 21
-neopixel_pin = 16
-steps = 3200
-speed = steps * 2
-a = speed * 2
-# Initialize the stepper motor with enable active low
-stepper_motor = Stepper(pul_pin, dir_pin, ena_pin, steps_per_rev=steps, 
-                        max_speed_sps=speed, acceleration=a, en_active_low=True)
-
-newspeed = stepper_motor.rpm2sps(400)
-print("sps for 300 rpm", newspeed)
-
-stepper_motor.set_max_speed(newspeed)
-stepper_motor.set_acceleration(stepper_motor.rpm2sps(50))
 
 # Initialize the NeoPixel
-np = NeoPixel(machine.Pin(neopixel_pin), 1)
+NEOPIXEL_PIN = 16
+np = NeoPixel(machine.Pin(NEOPIXEL_PIN), 1)
+
+# Colors for different states (RGB format)
+COLOR_IDLE = (0, 0, 0)        # Off
+COLOR_MOVING = (0, 255, 0)    # Green
+COLOR_ACCELERATING = (0, 0, 255)  # Blue
+COLOR_DECELERATING = (255, 165, 0)  # Orange
+COLOR_FREE_RUNNING = (255, 0, 255)  # Purple
+COLOR_EMERGENCY = (255, 0, 0)  # Red
 
 def set_neopixel_color(color):
-  np[0] = color
-  np.write()
+    np[0] = color
+    np.write()
 
-try:
-  # Enable the stepper motor (active low logic)
-  stepper_motor.enable(1)  # Enable the motor (active low means setting to 1 will disable, so we use 1 to enable)
-  
-  
-  while True:
-      # Set NeoPixel to green when running
-      set_neopixel_color((0, 255, 0))
-      
-      stepper_motor.move_to_deg(360*3)
-      print(stepper_motor.get_speed())
+# Initialize stepper motor
+STEP_PIN = 18
+DIR_PIN = 19
+EN_PIN = 21
 
+def print_status(stepper, message=""):
+    """Print current status of the stepper motor"""
+    print(f"\n--- {message} ---")
+    print(f"Position: {stepper.get_position()} steps ({stepper.get_position_deg():.2f}°) with target {stepper.target_pos} steps")
+    print(f"Speed: {stepper.get_speed():.2f} steps/sec ({stepper.sps2rpm(stepper.get_speed()):.2f} RPM)")
+    print(f"Running: {stepper.is_running()}")
 
-      
-      time.sleep(5)
-      
-      
-      
-      # Set NeoPixel to blue when idle
-      set_neopixel_color((0, 0, 255))
-      time.sleep(1)
-      
-      # Set NeoPixel to green when running
-      set_neopixel_color((0, 255, 0))
-      
-      stepper_motor.move_to_deg(-360*3)
+def test_basic_movement(stepper):
+    """Test basic movement with acceleration"""
+    print("\n=== Testing Basic Movement ===")
+    
+    # Move 400 steps forward
+    print("\nMoving 400 steps forward...")
+    set_neopixel_color(COLOR_MOVING)
+    stepper.move(400)
+    
+    # Wait until movement completes while monitoring status
+    while stepper.is_running():
+        print_status(stepper, "Moving forward")
+        time.sleep(1)
+    
+    set_neopixel_color(COLOR_IDLE)
+    print_status(stepper, "Movement completed")
+    time.sleep(1)
+    
+    # Move back to zero
+    print("\nMoving back to zero...")
+    set_neopixel_color(COLOR_MOVING)
+    stepper.move_to(0)
+    
+    while stepper.is_running():
+        print_status(stepper, "Moving to zero")
+        time.sleep(1)
+    
+    set_neopixel_color(COLOR_IDLE)
+    print_status(stepper, "Returned to zero")
 
-      time.sleep(5)
+def test_free_run(stepper):
+    """Test free running mode"""
+    print("\n=== Testing Free Run Mode ===")
+    
+    # Run forward for 3 seconds
+    print("\nFree running forward...")
+    set_neopixel_color(COLOR_FREE_RUNNING)
+    stepper.free_run(1, 800)  # Run forward at 800 steps/sec
+    
+    start_time = time.time()
+    while time.time() - start_time < 3:
+        print_status(stepper, "Free running forward")
+        time.sleep(1)
+    
+    # Run reverse for 3 seconds
+    print("\nFree running reverse...")
+    stepper.free_run(-1, 400)  # Run reverse at 400 steps/sec
+    
+    start_time = time.time()
+    while time.time() - start_time < 3:
+        print_status(stepper, "Free running reverse")
+        time.sleep(1)
+    
+    # Stop free run
+    print("\nStopping free run...")
+    stepper.free_run(0)
+    set_neopixel_color(COLOR_IDLE)
+    print_status(stepper, "Free run stopped")
 
-      
-     
+def test_acceleration_profiles(stepper):
+    """Test different acceleration profiles"""
+    print("\n=== Testing Acceleration Profiles ===")
+    
+    # Test high acceleration
+    stepper.set_acceleration(2000)
+    print("\nMoving with high acceleration (2000 steps/s²)...")
+    set_neopixel_color(COLOR_ACCELERATING)
+    stepper.move(800)
+    
+    while stepper.is_running():
+        print_status(stepper, "High acceleration movement")
+        time.sleep(1)
+    
+    time.sleep(1)
+    
+    # Test low acceleration
+    stepper.set_acceleration(200)
+    print("\nMoving with low acceleration (200 steps/s²)...")
+    set_neopixel_color(COLOR_ACCELERATING)
+    stepper.move(-800)
+    
+    while stepper.is_running():
+        print_status(stepper, "Low acceleration movement")
+        time.sleep(0.1)
+    
+    set_neopixel_color(COLOR_IDLE)
 
-      # Set NeoPixel to blue when idle
-      set_neopixel_color((0, 0, 255))
-      time.sleep(1)
+def test_emergency_stop(stepper):
+    """Test emergency stop functionality"""
+    print("\n=== Testing Emergency Stop ===")
+    
+    # Start a long movement
+    print("\nStarting long movement...")
+    set_neopixel_color(COLOR_MOVING)
+    stepper.move(2000)
+    
+    # Wait a bit then trigger emergency stop
+    time.sleep(1)
+    print("\nTriggering emergency stop!")
+    set_neopixel_color(COLOR_EMERGENCY)
+    stepper.emergency_stop()
+    
+    print_status(stepper, "After emergency stop")
+    time.sleep(1)
+    set_neopixel_color(COLOR_IDLE)
 
-except KeyboardInterrupt:
-  # Set NeoPixel to red when stopped
-  set_neopixel_color((255, 0, 0))
-  stepper_motor.stop()
-  print("Motor control stopped")
+def main():
+    """Main test sequence"""
+    try:
+        # Initialize stepper with moderate speed and acceleration
+        stepper = Stepper(
+            step_pin=STEP_PIN,
+            dir_pin=DIR_PIN,
+            en_pin=EN_PIN,
+            steps_per_rev=200,
+            speed_sps=50,
+            max_speed_sps=1000,
+            acceleration=2000,
+            timer_id=0,
+            en_active_low=True
+        )
+        
+        print("\nStepper motor initialized")
+        print(f"Max speed: {stepper.get_max_speed()} steps/sec")
+        print(f"Acceleration: {stepper.get_acceleration()} steps/sec²")
+        
+        # Enable the motor
+        stepper.enable(True)
+        set_neopixel_color(COLOR_IDLE)
+        
+        # Run all tests
+        test_basic_movement(stepper)
+        time.sleep(1)
+        
+        test_free_run(stepper)
+        time.sleep(1)
+        
+        test_acceleration_profiles(stepper)
+        time.sleep(1)
+        
+        test_emergency_stop(stepper)
+        
+        # Cleanup
+        stepper.enable(False)
+        set_neopixel_color(COLOR_IDLE)
+        print("\nTest sequence completed")
+        
+    except Exception as e:
+        set_neopixel_color(COLOR_EMERGENCY)
+        print(f"Error occurred: {e}")
+        raise
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        print(f"Stopped Script {e}")
+        set_neopixel_color(COLOR_EMERGENCY)
+        raise
