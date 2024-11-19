@@ -148,8 +148,8 @@ def main():
             en_pin=EN_PIN,
             steps_per_rev=200,
             speed_sps=50,
-            max_speed_sps=1000,
-            acceleration=2000,
+            max_speed_sps=500,
+            acceleration=1000,
             timer_id=0,
             en_active_low=True
         )

@@ -65,7 +65,7 @@ class Stepper:
         self.running = False
         self.enabled = True
         self.free_run_mode = 0
-        self.free_run_speed = 0.0
+        self.free_run_speed = speed_sps
         
         # Timer management
         self._init_timer(timer_id)
@@ -84,7 +84,7 @@ class Stepper:
             self.timer = machine.Timer(timer_id)
             self.timer_is_running = False
             self.timer_id = timer_id
-            # Initialize with a high base frequency (10kHz)
+            # Initialize 
             self._start_timer()
         except Exception as e:
             if self.on_error:
@@ -95,7 +95,7 @@ class Stepper:
         """Start the timer with high base frequency."""
         try:
             self.timer.deinit()
-            self.timer.init(freq=10000, callback=self._timer_callback)  # 10kHz base frequency
+            self.timer.init(freq=self.steps_per_sec, callback=self._timer_callback)  
             self.timer_is_running = True
         except Exception as e:
             if self.on_error:
@@ -131,7 +131,8 @@ class Stepper:
 
         # Handle free run mode
         if self.free_run_mode != 0:
-            target_speed = self.free_run_speed * self.free_run_mode
+            target_speed = self.free_run_speed if self.free_run_mode > 0 else -self.free_run_speed
+            self.step_interval = self._calc_step_interval(target_speed)
             self.direction = self.free_run_mode
             if self._n == 0:
                 self._cn = self._c0
@@ -207,13 +208,25 @@ class Stepper:
             self.stop()
             return
         
+        # Set free run parameters
         self.free_run_mode = direction
         self.free_run_speed = speed if speed is not None else self.max_speed
         self.free_run_speed = min(self.free_run_speed, self.max_speed)
         
-        self._n = 0  # Reset step counter
+        # Reset acceleration parameters
+        self._n = 0
+        self._cn = self._c0
+        self.direction = direction
+        
+        # Set initial speed to a small value to start movement
+        self.current_speed = direction * (self.max_speed / 100)  # Start at 1% of max speed
+        self.step_interval = self._calc_step_interval(abs(self.current_speed))
+        
+        # Enable running state
         self.running = True
         self.last_step_time = time.ticks_us()
+        
+        # Force an immediate speed update
         self._update_speed()
 
     def stop(self) -> None:
@@ -260,10 +273,16 @@ class Stepper:
 
     def set_max_speed(self, speed: float) -> None:
         """Set maximum speed in steps per second."""
-        if speed < 0:
-            raise ValueError("Speed cannot be negative")
-        self.max_speed = speed
-        self.min_step_interval = self._calc_step_interval(speed)
+        if speed < 0.0:
+            speed = -speed
+        if self.max_speed != speed:
+            self.max_speed = speed
+            self._cmin = 1000000.0 / self.max_speed
+            if self.n>0:
+                self.n = int((self.current_speed * self.current_speed) / (2.0 * self.acceleration))
+                self.step_interval = self._calc_step_interval(self.current_speed)
+                self._update_speed()
+        
 
     def set_acceleration(self, acceleration: float) -> None:
         """Set acceleration in steps per second squared."""
