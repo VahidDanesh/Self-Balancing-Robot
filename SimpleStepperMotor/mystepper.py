@@ -46,6 +46,7 @@ class Stepper:
         # Motor parameters
         self.steps_per_rev = steps_per_rev
         self.max_speed = max_speed_sps
+        self.steps_per_sec = max_speed_sps
         self.acceleration = acceleration  # steps/second^2
         
         # Position tracking
@@ -155,6 +156,19 @@ class Stepper:
             if self.free_run_mode == 0:
                 self._update_speed()
 
+    def _start_timer(self) -> None:
+        """Start the timer with current parameters."""
+        try:
+            self.timer.deinit()
+            # Use a high frequency base timer and handle timing in the callback
+            self.timer.init(freq=self.steps_per_sec, callback=self._timer_callback)
+            self.timer_is_running = True
+        except Exception as e:
+            if self.on_error:
+                self.on_error(f"Timer start failed: {e}")
+            raise RuntimeError(f"Timer start failed: {e}")
+    
+
     def free_run(self, direction: int, speed: float = None) -> None:
         """
         Run the stepper continuously in specified direction at constant speed.
@@ -181,6 +195,7 @@ class Stepper:
         self.step_interval = self._calc_step_interval(self.free_run_speed)
         self.direction = direction
         self.running = True
+        self.current_speed = self.free_run_speed
         
         if not self.timer_is_running:
             self._start_timer()
@@ -223,18 +238,7 @@ class Stepper:
         if self.on_error:
             self.on_error("Emergency stop triggered")
 
-    def _start_timer(self) -> None:
-        """Start the timer with current parameters."""
-        try:
-            self.timer.deinit()
-            # Use a high frequency base timer and handle timing in the callback
-            self.timer.init(freq=10000, callback=self._timer_callback)
-            self.timer_is_running = True
-        except Exception as e:
-            if self.on_error:
-                self.on_error(f"Timer start failed: {e}")
-            raise RuntimeError(f"Timer start failed: {e}")
-    
+
     def set_position(self, position: int) -> None:
         """Set current position in steps."""
         self.current_pos = position

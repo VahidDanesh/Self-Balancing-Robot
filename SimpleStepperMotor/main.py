@@ -15,6 +15,12 @@ a = speed * 2
 stepper_motor = Stepper(pul_pin, dir_pin, ena_pin, steps_per_rev=steps, 
                         max_speed_sps=speed, acceleration=a, en_active_low=True)
 
+newspeed = stepper_motor.rpm2sps(400)
+print("sps for 300 rpm", newspeed)
+
+stepper_motor.set_max_speed(newspeed)
+stepper_motor.set_acceleration(stepper_motor.rpm2sps(50))
+
 # Initialize the NeoPixel
 np = NeoPixel(machine.Pin(neopixel_pin), 1)
 
@@ -31,11 +37,15 @@ try:
       # Set NeoPixel to green when running
       set_neopixel_color((0, 255, 0))
       
-      stepper_motor.free_run(1)
+      stepper_motor.move_to_deg(360*3)
+      print(stepper_motor.get_speed())
+
+
       
-      time.sleep(10)
+      time.sleep(5)
       
-      stepper_motor.free_run(0)
+      
+      
       # Set NeoPixel to blue when idle
       set_neopixel_color((0, 0, 255))
       time.sleep(1)
@@ -43,10 +53,13 @@ try:
       # Set NeoPixel to green when running
       set_neopixel_color((0, 255, 0))
       
-      stepper_motor.free_run(-1)
-      time.sleep(10)
+      stepper_motor.move_to_deg(-360*3)
+
+      time.sleep(5)
+
       
-      stepper_motor.free_run(0)
+     
+
       # Set NeoPixel to blue when idle
       set_neopixel_color((0, 0, 255))
       time.sleep(1)
