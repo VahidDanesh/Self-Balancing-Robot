@@ -39,7 +39,7 @@ def test_basic_movement(stepper):
     # Move 400 steps forward
     print("\nMoving 400 steps forward...")
     set_neopixel_color(COLOR_MOVING)
-    stepper.move(400)
+    stepper.move_to_deg(360*10)
     
     # Wait until movement completes while monitoring status
     while stepper.is_running():
@@ -138,21 +138,29 @@ def test_emergency_stop(stepper):
     time.sleep(1)
     set_neopixel_color(COLOR_IDLE)
 
+try:
+        # Initialize stepper with moderate speed and acceleration
+    stepper = Stepper(
+        step_pin=STEP_PIN,
+        dir_pin=DIR_PIN,
+        en_pin=EN_PIN,
+        steps_per_rev=3200,
+        speed_sps=6000*2,
+        max_speed_sps=6000*3,
+        acceleration=6000*10,
+        timer_id=0,
+        en_active_low=True
+    )
+except Exception as e:
+    print(f"Error initializing stepper: {e}")
+    set_neopixel_color(COLOR_EMERGENCY)
+    raise
+
+
+
 def main():
     """Main test sequence"""
     try:
-        # Initialize stepper with moderate speed and acceleration
-        stepper = Stepper(
-            step_pin=STEP_PIN,
-            dir_pin=DIR_PIN,
-            en_pin=EN_PIN,
-            steps_per_rev=200,
-            speed_sps=50,
-            max_speed_sps=500,
-            acceleration=1000,
-            timer_id=0,
-            en_active_low=True
-        )
         
         print("\nStepper motor initialized")
         print(f"Max speed: {stepper.get_max_speed()} steps/sec")
@@ -182,12 +190,16 @@ def main():
     except Exception as e:
         set_neopixel_color(COLOR_EMERGENCY)
         print(f"Error occurred: {e}")
+        stepper.stop()
+        stepper.enable(False)
         raise
+
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         print(f"Stopped Script {e}")
+        stepper.stop()
         set_neopixel_color(COLOR_EMERGENCY)
         raise

@@ -95,7 +95,8 @@ class Stepper:
         """Start the timer with high base frequency."""
         try:
             self.timer.deinit()
-            self.timer.init(freq=self.steps_per_sec, callback=self._timer_callback)  
+            self.timer.init(freq=self.current_speed if self.current_speed !=0  else self.steps_per_sec, 
+                            callback=self._timer_callback)  
             self.timer_is_running = True
         except Exception as e:
             if self.on_error:
