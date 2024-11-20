@@ -19,10 +19,10 @@ class Stepper:
                  step_pin: machine.Pin | int,
                  dir_pin: machine.Pin | int,
                  en_pin: machine.Pin | int | None = None,
-                 steps_per_rev: int = 200,
-                 speed_sps: float = 100,
-                 max_speed_sps: float = 1000,
-                 acceleration: float = 1000,
+                 steps_per_rev: int = 1600,
+                 speed_sps: float = 1600 * 5,
+                 max_speed_sps: float = 10000,
+                 acceleration: float = 10000 * 30,
                  invert_dir: bool = False,
                  timer_id: int = -1,
                  en_active_low: bool = True):
@@ -85,18 +85,17 @@ class Stepper:
             self.timer_is_running = False
             self.timer_id = timer_id
             # Initialize 
-            self._start_timer()
+            self._start_timer(self.steps_per_sec)
         except Exception as e:
             if self.on_error:
                 self.on_error(f"Timer initialization failed: {e}")
             raise RuntimeError(f"Timer initialization failed: {e}")
 
-    def _start_timer(self) -> None:
+    def _start_timer(self, sps) -> None:
         """Start the timer with high base frequency."""
         try:
             self.timer.deinit()
-            self.timer.init(freq=self.current_speed if self.current_speed !=0  else self.steps_per_sec, 
-                            callback=self._timer_callback)  
+            self.timer.init(freq=sps, callback=self._timer_callback)  # Use a high frequency base 10kHz
             self.timer_is_running = True
         except Exception as e:
             if self.on_error:
@@ -114,13 +113,19 @@ class Stepper:
         if not self.running:
             return
 
-        # Calculate distance to go
+        # Handle free run mode
+        if self.free_run_mode != 0:
+            # Set speed directly for free run
+            self.current_speed = self.free_run_speed * self.free_run_mode
+            self.step_interval = self._calc_step_interval(self.current_speed)
+            self.direction = self.free_run_mode
+            return
+
+        # Calculate distance to go and steps needed to stop
         steps_to_go = self.target_pos - self.current_pos
-        
-        # Calculate steps needed to stop
-        steps_to_stop = int((self.current_speed * self.current_speed) / (2.0 * self.acceleration))
-        
-        # Check if we're at target and nearly stopped
+        steps_to_stop = int((self.current_speed ** 2) / (2.0 * self.acceleration))
+
+        # Check if at target and nearly stopped
         if steps_to_go == 0 and steps_to_stop <= 1:
             self.step_interval = 0
             self.current_speed = 0.0
@@ -130,46 +135,23 @@ class Stepper:
                 self.on_target_reached()
             return
 
-        # Handle free run mode
-        if self.free_run_mode != 0:
-            target_speed = self.free_run_speed if self.free_run_mode > 0 else -self.free_run_speed
-            self.step_interval = self._calc_step_interval(target_speed)
-            self.direction = self.free_run_mode
-            if self._n == 0:
-                self._cn = self._c0
-            else:
-                self._cn = self._cn - ((2.0 * self._cn) / ((4.0 * self._n) + 1))
-                self._cn = max(self._cn, self._cmin)
-        else:
-            # Normal position control mode
-            if steps_to_go > 0:
-                if self._n > 0:
-                    if (steps_to_stop >= steps_to_go) or self.direction < 0:
-                        self._n = -steps_to_stop
-                elif self._n < 0:
-                    if (steps_to_stop < steps_to_go) and self.direction > 0:
-                        self._n = -self._n
-            elif steps_to_go < 0:
-                if self._n > 0:
-                    if (steps_to_stop >= -steps_to_go) or self.direction > 0:
-                        self._n = -steps_to_stop
-                elif self._n < 0:
-                    if (steps_to_stop < -steps_to_go) and self.direction < 0:
-                        self._n = -self._n
+        # Normal position control mode
+        if steps_to_go != 0:
+            if (steps_to_go > 0 and (self._n <= 0 or steps_to_stop < steps_to_go)) or \
+            (steps_to_go < 0 and (self._n >= 0 or steps_to_stop < -steps_to_go)):
+                self._n = -steps_to_stop if self._n > 0 else -self._n
 
-            if self._n == 0:
-                self._cn = self._c0
-                self.direction = 1 if steps_to_go > 0 else -1
-            else:
-                self._cn = self._cn - ((2.0 * self._cn) / ((4.0 * self._n) + 1))
-                self._cn = max(self._cn, self._cmin)
+        if self._n == 0:
+            self._cn = self._c0
+            self.direction = 1 if steps_to_go > 0 else -1
+        else:
+            self._cn = self._cn - ((2.0 * self._cn) / ((4.0 * self._n) + 1))
+            self._cn = max(self._cn, self._cmin)
 
         # Update step counter and timing
         self._n += 1
         self.step_interval = int(self._cn)
-        self.current_speed = 1000000.0 / self._cn
-        if self.direction < 0:
-            self.current_speed = -self.current_speed
+        self.current_speed = 1000000.0 / self._cn * (1 if self.direction > 0 else -1)
 
     def _timer_callback(self, t: machine.Timer) -> None:
         """Timer callback for stepping motor."""
@@ -179,7 +161,7 @@ class Stepper:
         current_time = time.ticks_us()
         if time.ticks_diff(current_time, self.last_step_time) >= self.step_interval:
             if self.enabled:
-                self.dir_value_func(1 if self.direction > 0 else 0 ^ self.invert_dir)
+                self.dir_value_func((1 if self.direction > 0 else 0) ^ self.invert_dir)
                 self.step_value_func(1)
                 self.step_value_func(0)
             
@@ -215,13 +197,14 @@ class Stepper:
         self.free_run_speed = min(self.free_run_speed, self.max_speed)
         
         # Reset acceleration parameters
-        self._n = 0
-        self._cn = self._c0
-        self.direction = direction
+        if not self.running:
+            self._n = 0
+            self._cn = self._c0
+            self.direction = direction
         
         # Set initial speed to a small value to start movement
-        self.current_speed = direction * (self.max_speed / 100)  # Start at 1% of max speed
-        self.step_interval = self._calc_step_interval(abs(self.current_speed))
+        self.current_speed = self.free_run_speed * (1 if self.direction > 0 else -1)
+        self.step_interval = self._calc_step_interval(self.current_speed)
         
         # Enable running state
         self.running = True
@@ -229,14 +212,6 @@ class Stepper:
         
         # Force an immediate speed update
         self._update_speed()
-
-    def stop(self) -> None:
-        """Stop motor with deceleration."""
-        self.free_run_mode = 0
-        self.target_pos = self.current_pos
-        self._n = -int((self.current_speed * self.current_speed) / (2.0 * self.acceleration))
-        self._update_speed()
-
 
 
     def move_to_deg(self, degrees: float) -> None:
@@ -247,7 +222,6 @@ class Stepper:
         """Move to absolute position in radians with acceleration."""
         self.move_to(int(radians * self.steps_per_rev / (2.0 * math.pi)))
     
-
     def stop(self) -> None:
         """Stop motor with deceleration."""
         self.free_run_mode = 0
@@ -265,12 +239,9 @@ class Stepper:
         if self.on_error:
             self.on_error("Emergency stop triggered")
 
-
     def set_position(self, position: int) -> None:
         """Set current position in steps."""
         self.current_pos = position
-    
-
 
     def set_max_speed(self, speed: float) -> None:
         """Set maximum speed in steps per second."""
@@ -279,20 +250,39 @@ class Stepper:
         if self.max_speed != speed:
             self.max_speed = speed
             self._cmin = 1000000.0 / self.max_speed
-            if self.n>0:
-                self.n = int((self.current_speed * self.current_speed) / (2.0 * self.acceleration))
+            if self._n > 0:
+                self._n = int((self.current_speed * self.current_speed) / (2.0 * self.acceleration))
                 self.step_interval = self._calc_step_interval(self.current_speed)
                 self._update_speed()
-        
 
     def set_acceleration(self, acceleration: float) -> None:
         """Set acceleration in steps per second squared."""
-        if acceleration <= 0:
-            raise ValueError("Acceleration must be positive")
-        self.acceleration = acceleration
+        if acceleration == 0:
+            return
+        if acceleration < 0:
+            acceleration = -acceleration
+        if self.acceleration != acceleration:
+            self._n = self._n * (self.acceleration / acceleration)
+            self._c0 = 0.676 * math.sqrt(2.0 / acceleration) * 1000000.0
+            self._acceleration = acceleration
+            self._update_speed()
+    
+    def set_speed(self, speed: float) -> None:
+        """Set current speed in steps per second."""
+        if speed == self.current_speed:
+            return
+        speed = constrain(speed, -self.max_speed, self.max_speed)
 
-    
-    
+        if speed == 0:
+            self.stop()
+
+        else:
+            self.steps_per_sec = speed
+            self.step_interval = self._calc_step_interval(speed)
+            self.direction = 1 if speed > 0 else -1
+            
+        self.current_speed = speed
+
 
     def enable(self, state: bool) -> None:
         """Enable or disable the stepper motor."""
@@ -334,7 +324,6 @@ class Stepper:
         """Get current position in radians."""
         return self.current_pos * 2 * math.pi / self.steps_per_rev
     
-
     def sps2rpm(self, speed_sps: float) -> float:
         """Convert speed in steps per second to RPM."""
         return speed_sps * 60 / self.steps_per_rev
